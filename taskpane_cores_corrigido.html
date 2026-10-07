@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>DSI — Controle de Ocorrências</title>
+<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+:root{--navy:#1f3a5f;--red:#e74c3c;--green:#2ecc71;--purple:#8e44ad;--orange:#e67e22;--gray:#eef2f7;--border:#c9d4e0;--text:#222}
+*{box-sizing:border-box}body{font-family:"Segoe UI",Arial,sans-serif;margin:0;padding:10px;color:var(--text);font-size:13px;background:#fafbfc}
+h3{color:var(--navy);margin:10px 0 5px;font-size:14px;border-bottom:2px solid var(--navy);padding-bottom:3px}
+.hint{color:#666;font-size:11px;margin:2px 0 8px;font-style:italic}
+.tabs{display:flex;gap:4px;margin-bottom:8px}.tab{flex:1;padding:8px 4px;text-align:center;background:var(--gray);border-radius:6px;cursor:pointer;font-weight:700;font-size:11px}.tab.active{background:var(--navy);color:#fff}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}.row{display:flex;gap:6px;align-items:end}.row>*{flex:1}
+.btn{width:100%;padding:9px;border:none;border-radius:7px;background:var(--navy);color:#fff;font-weight:700;cursor:pointer}.btn.green{background:var(--green)}.btn.orange{background:var(--orange)}.btn.purple{background:var(--purple)}
+.btn2{width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;font-weight:600}
+.btn:disabled,.btn2:disabled{opacity:.55;cursor:wait}
+.opt{padding:8px 4px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;text-align:center;font-size:11px}.opt.sel{background:var(--navy);color:#fff;border-color:var(--navy)}
+input,select{width:100%;padding:7px;border:2px solid var(--border);border-radius:6px;font-size:13px}label{display:block;margin:7px 0 3px;font-weight:600;font-size:11px}
+.card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px;margin:5px 0}.small{font-size:11px;color:#666}.mono{font-family:Consolas,monospace}
+.chip{display:inline-flex;align-items:center;gap:5px;background:#eef5ff;border:1px solid #b8d0f0;border-radius:14px;padding:3px 7px;margin:2px;font-size:10px}.danger{color:#b03a2e;font-weight:700}.ok{color:#197a4c;font-weight:700}
+.hide{display:none}.scroll{max-height:230px;overflow:auto}.table{width:100%;border-collapse:collapse;font-size:10px}.table th,.table td{border:1px solid #ddd;padding:4px}.table th{background:var(--navy);color:#fff}
+#status{font-weight:700}.status-ok{color:#197a4c;background:#e8f8f0;border-color:#a8e0c4}.status-run{color:#8a5a00;background:#fff7d6;border-color:#ead38a}.status-err{color:#b03a2e;background:#fdecea;border-color:#efb0aa}
+#msg{display:none;margin-top:7px;padding:8px;border-radius:6px;font-size:11px}.msgok{display:block;background:#e8f8f0;color:#197a4c;border:1px solid var(--green)}.msgerr{display:block;background:#fdecea;color:#b03a2e;border:1px solid var(--red)}
+</style>
+</head>
+<body>
+<div id="status" class="card status-run">Conectando ao Excel…</div>
+<div class="row" style="margin-bottom:6px">
+  <button class="btn2" id="refresh">🔄 Atualizar</button>
+  <button class="btn2" id="sync">💾 Sincronizar</button>
+</div>
+<div id="resumo" class="card"></div>
+
+<div class="tabs">
+  <div class="tab active" data-v="lancar">Lançar</div>
+  <div class="tab" data-v="pagar">Pagar</div>
+  <div class="tab" data-v="armario">🗄️ Armário</div>
+  <div class="tab" data-v="chefia">🔒 Chefia</div>
+</div>
+
+<section id="lancar">
+<h3>Lançar ocorrências</h3>
+<div class="hint">Os lançamentos são gravados diretamente na aba <b>Oficios</b> do workbook aberto.</div>
+<div class="row">
+<div><label>Nº do ofício</label><input id="oficio" placeholder="1234.2026"></div>
+<div><label>Unidade Policial</label><input id="unidade" placeholder="9ª DD"></div>
+<div><label>Envelope</label><input id="envelope" placeholder="12345"></div>
+</div>
+<div class="row" style="margin-top:6px">
+<div><label>Devolução</label><select id="devolucao"><option value="SIM">SIM</option><option value="NÃO">NÃO</option></select></div>
+<div><button class="btn" id="add">Adicionar</button></div>
+</div>
+<div id="pendentesL" class="card">Nenhum ofício adicionado.</div>
+<button class="btn" id="distribuir">📋 Distribuir</button>
+<h3>Últimos lançamentos</h3>
+<div id="estornos" class="scroll"></div>
+</section>
+
+<section id="pagar" class="hide">
+<h3>Quem fez o laudo?</h3><div id="peritos" class="grid3"></div>
+<h3>Ofícios no armário</h3>
+<div class="row"><input id="buscaPagar" placeholder="Buscar ofício, unidade, envelope ou instância"><button class="btn2" id="incluirTodos">Adicionar todos com laudo</button></div>
+<div id="listaPagar" class="scroll"></div>
+<button class="btn green" id="pagar">✔ Registrar pagamento</button>
+</section>
+
+<section id="armario" class="hide">
+<h3>🗄️ Armário virtual</h3>
+<input id="buscaArmario" placeholder="Buscar ofício, unidade, envelope ou instância">
+<div id="gavetas" class="scroll" style="margin-top:7px"></div>
+</section>
+
+<section id="chefia" class="hide">
+<div id="loginChefia">
+<h3>🔒 Área da Chefia</h3><input id="senha" type="password" placeholder="Senha"><button class="btn" id="entrar">Entrar</button>
+</div>
+<div id="painelChefia" class="hide">
+<h3>Percentual Plantão × Química</h3>
+<div class="row"><div><label>Plantão %</label><input id="pct" type="number" min="0" max="100"></div><div><label>Senha</label><input id="senha2" type="password"></div></div>
+<label>Observação</label><input id="obsPct"><button class="btn" id="salvarPct">Salvar percentual</button>
+
+<h3>Pesos</h3><div id="pesosDias"></div><div id="pesosQuim"></div><button class="btn purple" id="salvarPesos">Salvar pesos</button>
+
+<h3>Ranking de laudos</h3><div class="row"><input id="rankDe" type="date"><input id="rankAte" type="date"><button class="btn2" id="ranking">Atualizar</button></div><div id="rankBox"></div>
+
+<h3>CCV</h3><button class="btn2" id="ccvRefresh">Atualizar pendentes</button><div id="ccvBox" class="scroll"></div><button class="btn orange" id="ccvEnviar">Encaminhar selecionados</button>
+
+<h3>Auditoria</h3><div class="row"><input id="audDe" type="date"><input id="audAte" type="date"><button class="btn2" id="auditar">Criar relatório</button></div>
+
+<h3>⚠ Ações administrativas</h3><div class="row"><select id="instZerar"></select><button class="btn2" id="zerarInst">Zerar instância</button></div>
+<button class="btn2" id="zerarTodos" style="margin-top:6px">Zerar todas</button>
+</div></section>
+
+<div id="msg"></div>
+
+<script>
+const DIAS=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+const ADMIN="0205";
+const S={
+ dias:[...DIAS],quim:[],equipe:[],metasD:{},metasQ:{},pesosD:{},pesosQ:{},pct:50,pontD:0,pontQ:0,vez:"plantao",
+ oficios:[],pagamentos:[],laudos:[],dist:[],props:{},logged:false
+};
+let buffer=[],selectedPerito="",pagarRows=[],ccvRows=[];
+
+const $=id=>document.getElementById(id);
+const t=v=>v==null?"":String(v).trim();
+const upper=v=>t(v).toUpperCase();
+const esc=v=>t(v).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function showStatus(text,kind="ok"){const e=$("status");e.textContent=text;e.className="card "+(kind==="run"?"status-run":kind==="err"?"status-err":"status-ok")}
+function showMsg(text,ok=true){const e=$("msg");e.textContent=text;e.className=ok?"msgok":"msgerr";setTimeout(()=>{e.className="";e.style.display="none"},4500)}
+async function safe(label,fn){
+ showStatus(label+"…","run");
+ try{const r=await fn();showStatus("DSI pronto.","ok");return r}
+ catch(e){console.error(e);showStatus("Erro na operação","err");showMsg((e&&e.message)?e.message:String(e),false)}
+}
+function disableButtons(dis){
+ document.querySelectorAll("button").forEach(b=>b.disabled=dis);
+}
+
+Office.onReady(async(info)=>{
+ bind();
+ if(info.host!==Office.HostType.Excel){showStatus("Este suplemento deve ser aberto no Excel.","err");return}
+ await safe("Lendo a planilha",init);
+});
+
+function bind(){
+ document.querySelectorAll(".tab").forEach(tab=>tab.onclick=()=>{
+   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));tab.classList.add("active");
+   ["lancar","pagar","armario","chefia"].forEach(v=>$(v).classList.toggle("hide",v!==tab.dataset.v));
+   if(tab.dataset.v==="pagar")renderPagar();
+   if(tab.dataset.v==="armario")renderArmario();
+ });
+ $("refresh").onclick=()=>safe("Atualizando",init);
+ $("sync").onclick=()=>safe("Sincronizando",async()=>{await updatePainel();await init();showMsg("✔ Dados sincronizados com o workbook.")});
+ $("add").onclick=addBuffer;
+ $("distribuir").onclick=()=>safe("Distribuindo",distribuir);
+ $("incluirTodos").onclick=()=>{pagarRows=[];renderPagar(true)};
+ $("buscaPagar").oninput=()=>renderPagar();
+ $("pagar").onclick=()=>safe("Registrando pagamento",pagar);
+ $("buscaArmario").oninput=renderArmario;
+ $("entrar").onclick=()=>safe("Validando chefia",loginChefia);
+ $("salvarPct").onclick=()=>safe("Salvando percentual",salvarPct);
+ $("salvarPesos").onclick=()=>safe("Salvando pesos",salvarPesos);
+ $("ranking").onclick=()=>safe("Atualizando ranking",ranking);
+ $("ccvRefresh").onclick=()=>safe("Consultando CCV",ccvRefresh);
+ $("ccvEnviar").onclick=()=>safe("Encaminhando CCV",ccvEnviar);
+ $("auditar").onclick=()=>safe("Criando auditoria",auditar);
+ $("zerarInst").onclick=()=>safe("Zerando instância",zerarInst);
+ $("zerarTodos").onclick=()=>safe("Zerando todas",zerarTodos);
+}
+
+/* =========================
+   Excel helpers: EVERYTHING goes through Excel.run.
+   This is the key fix for the previously "frozen" buttons.
+   ========================= */
+async function readWorkbook(readFn){
+ return Excel.run(async ctx=>readFn(ctx));
+}
+async function writeWorkbook(writeFn){
+ return Excel.run(async ctx=>{const r=await writeFn(ctx);await ctx.sync();return r;});
+}
+async function readSheet(ctx,name){
+ const sh=ctx.workbook.worksheets.getItem(name);
+ const r=sh.getUsedRangeOrNullObject(true);
+ r.load(["values","rowCount","columnCount","isNullObject"]);
+ return {sh,r};
+}
+async function loadSheets(ctx,names){
+ const objs={};
+ for(const name of names){
+   objs[name]=await readSheet(ctx,name);
+ }
+ await ctx.sync();
+ const out={};
+ for(const name of names){const o=objs[name];out[name]=o.r.isNullObject?[]:o.r.values}
+ return out;
+}
+function propMapFromRows(rows){
+ const m={};for(let i=1;i<rows.length;i++){const k=t(rows[i][0]);if(k)m[k]=rows[i][1]}
+ return m;
+}
+function jsonSafe(v,fallback){
+ try{return JSON.parse(t(v)||JSON.stringify(fallback))}catch{return fallback}
+}
+async function replaceSheetValues(ctx,name,rows){
+ const sh=ctx.workbook.worksheets.getItem(name);
+ const old=sh.getUsedRangeOrNullObject(true);old.load(["rowCount","columnCount","isNullObject"]);
+ await ctx.sync();
+ if(!old.isNullObject) sh.getRangeByIndexes(0,0,Math.max(old.rowCount,rows.length),Math.max(old.columnCount,rows[0].length)).clear("Contents");
+ sh.getRangeByIndexes(0,0,rows.length,rows[0].length).values=rows;
+}
+function appendRange(ctx,sh,rows,startRow){
+ sh.getRangeByIndexes(startRow,0,rows.length,rows[0].length).values=rows;
+}
+async function getAppendRow(ctx,sh){
+ const r=sh.getUsedRangeOrNullObject(true);r.load(["rowCount","isNullObject"]);await ctx.sync();
+ return r.isNullObject?0:r.rowCount;
+}
+function pendingByInst(){
+ const c={};
+ for(let i=1;i<S.oficios.length;i++){const r=S.oficios[i];if(upper(r[4])==="NO ARMÁRIO"){const k=t(r[3]);if(k)c[k]=(c[k]||0)+1}}
+ return c;
+}
+
+/* =========================
+   Load state
+   ========================= */
+async function init(){
+ const data=await readWorkbook(ctx=>loadSheets(ctx,["Config","Propriedades","Oficios","Pagamentos","Laudos","Distribuicao"]));
+ S.quim=[];S.equipe=[];
+ for(let i=1;i<data.Config.length;i++){
+   if(t(data.Config[i][0])&&upper(data.Config[i][1])!=="NÃO")S.quim.push(t(data.Config[i][0]));
+   if(t(data.Config[i][3])&&upper(data.Config[i][4])!=="NÃO")S.equipe.push(t(data.Config[i][3]));
+ }
+ S.props=propMapFromRows(data.Propriedades);
+ S.metasD=jsonSafe(S.props.META_DIA,{});
+ S.metasQ=jsonSafe(S.props.META_QUIM,{});
+ S.pesosD=jsonSafe(S.props.PESOS_DIA,{});
+ S.pesosQ=jsonSafe(S.props.PESOS_QUIM,{});
+ S.pct=Number(S.props.PCT_PLANTAO??50);S.pontD=Number(S.props.PONT_DIA??0);S.pontQ=Number(S.props.PONT_QUIM??0);S.vez=t(S.props.VEZ_SOBRA)||"plantao";
+ DIAS.forEach(d=>{if(S.metasD[d]===undefined)S.metasD[d]=0;if(!(Number(S.pesosD[d])>0))S.pesosD[d]=1});
+ S.quim.forEach(q=>{if(S.metasQ[q]===undefined)S.metasQ[q]=0;if(!(Number(S.pesosQ[q])>0))S.pesosQ[q]=1});
+ S.oficios=data.Oficios;S.pagamentos=data.Pagamentos;S.laudos=data.Laudos;S.dist=data.Distribuicao;
+ renderAll();populateInst();
+ await updatePainel();
+ $("pct").value=S.pct;
+ $("status").title="Workbook ativo: "+(data.Oficios.length-1)+" registros em Oficios";
+}
+async function persistProps(ctx){
+ const sh=ctx.workbook.worksheets.getItem("Propriedades");
+ const old=sh.getUsedRangeOrNullObject(true);old.load(["rowCount","columnCount","isNullObject"]);await ctx.sync();
+ const map={...S.props,
+   META_DIA:JSON.stringify(S.metasD),META_QUIM:JSON.stringify(S.metasQ),
+   PESOS_DIA:JSON.stringify(S.pesosD),PESOS_QUIM:JSON.stringify(S.pesosQ),
+   PCT_PLANTAO:S.pct,PONT_DIA:S.pontD,PONT_QUIM:S.pontQ,VEZ_SOBRA:S.vez
+ };
+ const current=[];
+ const vals=old.isNullObject?[]:old.values;
+ const seen=new Set(["META_DIA","META_QUIM","PESOS_DIA","PESOS_QUIM","PCT_PLANTAO","PONT_DIA","PONT_QUIM","VEZ_SOBRA"]);
+ current.push(["Chave","Valor"]);
+ for(let i=1;i<vals.length;i++){
+   const k=t(vals[i][0]);if(!k||seen.has(k))continue;
+   current.push([k,vals[i][1]]);
+ }
+ for(const k of ["META_DIA","META_QUIM","PESOS_DIA","PESOS_QUIM","PCT_PLANTAO","PONT_DIA","PONT_QUIM","VEZ_SOBRA"]){
+   current.push([k,map[k]]);
+ }
+ if(!old.isNullObject) sh.getRangeByIndexes(0,0,Math.max(old.rowCount,current.length),2).clear("Contents");
+ sh.getRangeByIndexes(0,0,current.length,2).values=current;
+ S.props=map;
+}
+function applyPainelCores(ctx,sh,p){
+ const NAVY="#1f3a5f", PURPLE="#8e44ad", GREEN="#2ecc71", RED="#e74c3c", GRAY="#eef2f7", WHITE="#ffffff", TEXT="#222222";
+ const plantao=[
+   ["A8:C8","A9:C9","Domingo"],["E8:G8","E9:G9","Segunda"],
+   ["A12:C12","A13:C13","Terça"],["E12:G12","E13:G13","Quarta"],
+   ["A16:C16","A17:C17","Quinta"],["E16:G16","E17:G17","Sexta"],
+   ["A20:C20","A21:C21","Sábado"]
+ ];
+ const quim=[
+   ["I8:K8","I9:K9",0],["M8:O8","M9:O9",1],
+   ["I12:K12","I13:K13",2],["M12:O12","M13:O13",3],
+   ["I16:K16","I17:K17",4]
+ ];
+ for(const [head,saldo,name] of plantao){
+   const h=sh.getRange(head);
+   h.format.fill.color=NAVY; h.format.font.color=WHITE; h.format.font.bold=true;
+   h.format.horizontalAlignment="Center"; h.format.verticalAlignment="Center";
+   const sr=sh.getRange(saldo);
+   sr.format.fill.color=Number(p[name]||0)>0?RED:GREEN;
+   sr.format.font.color=WHITE; sr.format.font.bold=true;
+   sr.format.horizontalAlignment="Center"; sr.format.verticalAlignment="Center";
+ }
+ for(const [head,saldo,idx] of quim){
+   const h=sh.getRange(head);
+   h.format.fill.color=PURPLE; h.format.font.color=WHITE; h.format.font.bold=true;
+   h.format.horizontalAlignment="Center"; h.format.verticalAlignment="Center";
+   const sr=sh.getRange(saldo),name=S.quim[idx]||"";
+   sr.format.fill.color=Number(p[name]||0)>0?RED:GREEN;
+   sr.format.font.color=WHITE; sr.format.font.bold=true;
+   sr.format.horizontalAlignment="Center"; sr.format.verticalAlignment="Center";
+ }
+ const total=sh.getRange("A4");
+ total.format.fill.color=NAVY; total.format.font.color=WHITE; total.format.font.bold=true;
+ const occurrenceRanges=["A10:C10","E10:G10","A14:C14","E14:G14","A18:C18","E18:G18","A22:C22",
+                         "I10:K10","M10:O10","I14:K14","M14:O14","I18:K18"];
+ for(const addr of occurrenceRanges){
+   const r=sh.getRange(addr); r.format.fill.color=GRAY; r.format.font.color=TEXT;
+ }
+}
+
+async function updatePainel(){
+ await writeWorkbook(async ctx=>{
+   const sh=ctx.workbook.worksheets.getItem("Painel");
+   const p=pendingByInst();
+   let total=0;Object.values(p).forEach(v=>total+=v);
+   sh.getRange("A4").values=[["TOTAL A FAZER: "+total]];
+   applyPainelCores(ctx,sh,p);
+ });
+}
+
+/* =========================
+   Distribution
+   ========================= */
+function choose(list,metas,pesos,group){
+ const adj=x=>(Number(metas[x])||0)/(Number(pesos[x])||1),min=Math.min(...list.map(adj));
+ const ties=list.filter(x=>Math.abs(adj(x)-min)<1e-9);
+ let p=group==="D"?S.pontD:S.pontQ,ch=ties[0];
+ for(let i=0;i<list.length;i++){const idx=(p+i)%list.length;if(ties.includes(list[idx])){ch=list[idx];if(group==="D")S.pontD=(idx+1)%list.length;else S.pontQ=(idx+1)%list.length;break}}
+ metas[ch]=(Number(metas[ch])||0)+1;return ch;
+}
+function addBuffer(){
+ const n=t($("oficio").value),u=upper($("unidade").value),e=upper($("envelope").value),d=$("devolucao").value;
+ if(!/^\d{1,4}\.\d{4}$/.test(n))return showMsg("Formato do ofício inválido. Use XXXX.AAAA.",false);
+ if(!u)return showMsg("Unidade Policial obrigatória.",false);
+ buffer.push({numero:n,unidade:u,envelope:e,devolucao:d});
+ $("oficio").value="";$("unidade").value="";$("envelope").value="";renderBuffer();
+}
+function renderBuffer(){
+ const box=$("pendentesL");
+ box.innerHTML=buffer.length?buffer.map((o,i)=>`<span class="chip mono">${esc(o.numero)} — ${esc(o.unidade)}${o.envelope?", "+esc(o.envelope):""}<button data-i="${i}" style="border:0;background:none;color:#b03a2e;font-weight:bold;cursor:pointer">✕</button></span>`).join(""):"Nenhum ofício adicionado.";
+ box.querySelectorAll("button").forEach(b=>b.onclick=()=>{buffer.splice(Number(b.dataset.i),1);renderBuffer()});
+}
+async function distribuir(){
+ if(!buffer.length)throw new Error("Adicione ao menos um ofício.");
+ if(!S.quim.length)throw new Error("Não há peritos da Química ativos na aba Config.");
+ const total=buffer.length,pct=S.pct;
+ let nD=Math.floor(total*pct/100),nQ=Math.floor(total*(100-pct)/100),sobra=total-nD-nQ,quem="—";
+ if(sobra){if(S.vez==="plantao"){nD+=sobra;quem="Plantão";S.vez="quimica"}else{nQ+=sobra;quem="Química";S.vez="plantao"}}
+ const items=[...buffer].sort(()=>Math.random()-.5),dest=[];
+ for(let i=0;i<nD;i++)dest.push(choose(S.dias,S.metasD,S.pesosD,"D"));
+ for(let i=0;i<nQ;i++)dest.push("Q:"+choose(S.quim,S.metasQ,S.pesosQ,"Q"));
+ dest.sort(()=>Math.random()-.5);
+ const now=new Date().toISOString();
+ const ofRows=items.map((o,i)=>[o.numero,o.unidade,o.envelope,dest[i].replace(/^Q:/,""),"No armário","","",now,"",o.devolucao,""]);
+ await writeWorkbook(async ctx=>{
+   const o=ctx.workbook.worksheets.getItem("Oficios"),d=ctx.workbook.worksheets.getItem("Distribuicao");
+   const os=await getAppendRow(ctx,o);appendRange(ctx,o,ofRows,os);
+   const ds=await getAppendRow(ctx,d);
+   const resumo=items.map((x,i)=>x.numero+"→"+dest[i].replace(/^Q:/,"")).join(", ");
+   appendRange(ctx,d,[[now,total,nD,nQ,resumo,`Dias ${JSON.stringify(S.metasD)} | Quím ${JSON.stringify(S.metasQ)}`,"Ativo",pct,JSON.stringify({dias:S.pesosD,quimica:S.pesosQ}),quem]],ds);
+   await persistProps(ctx);
+   const p=ctx.workbook.worksheets.getItem("Painel");let pend=0;for(const x of Object.values(pendingByInst()))pend+=x;p.getRange("A4").values=[["TOTAL A FAZER: "+(pend+total)]];
+ });
+ buffer=[];renderBuffer();await init();showMsg(`✔ ${total} ofício(s) distribuído(s): ${nD} Plantão e ${nQ} Química.`);
+}
+
+/* =========================
+   Payments
+   ========================= */
+function renderPeritos(){
+ const el=$("peritos");
+ el.innerHTML=S.equipe.map(n=>`<button class="opt ${selectedPerito===n?"sel":""}" data-p="${esc(n)}">${esc(n)}</button>`).join("");
+ el.querySelectorAll("button").forEach(b=>b.onclick=()=>{selectedPerito=b.dataset.p;renderPeritos()});
+}
+function armarioRows(){
+ return S.oficios.slice(1).map((r,i)=>({...r,linha:i+2})).filter(r=>upper(r[4])==="NO ARMÁRIO");
+}
+function renderPagar(all=false){
+ const q=upper($("buscaPagar").value),rows=armarioRows().filter(r=>!q||[r[0],r[1],r[2],r[3]].join(" ").toUpperCase().includes(q));
+ let html="";
+ for(const r of rows){
+   const ex=pagarRows.find(x=>x.linha===r.linha);
+   html+=`<div class="card"><b class="mono">${esc(r[0])}</b> — ${esc(r[1])}${r[2]?", "+esc(r[2]):""}<div class="small">${esc(r[3])}</div><div class="row"><input id="laudo_${r.linha}" placeholder="Nº do laudo" value="${ex?esc(ex.laudo):""}"><button class="btn2" data-ln="${r.linha}">+</button></div></div>`;
+ }
+ $("listaPagar").innerHTML=html||"<i>Nenhum ofício pendente.</i>";
+ $("listaPagar").querySelectorAll("button").forEach(b=>b.onclick=()=>{const linha=Number(b.dataset.ln),v=t($("laudo_"+linha).value),i=pagarRows.findIndex(x=>x.linha===linha);if(i>=0)pagarRows[i].laudo=v;else pagarRows.push({linha,laudo:v});renderPagar()});
+ if(all){
+   pagarRows=[];
+   for(const r of rows){const el=$("laudo_"+r.linha);if(el&&t(el.value))pagarRows.push({linha:r.linha,laudo:t(el.value)})}
+ }
+}
+async function pagar(){
+ if(!selectedPerito)throw new Error("Selecione o perito que fez o laudo.");
+ const itens=pagarRows.filter(x=>t(x.laudo));if(!itens.length)throw new Error("Inclua ao menos um ofício com número de laudo.");
+ const seen=new Set(S.laudos.slice(1).map(r=>upper(r[2])));const duplicates=[];const used=new Set();
+ for(const it of itens){const k=upper(it.laudo);if(seen.has(k)||used.has(k))duplicates.push(it.laudo);used.add(k)}
+ if(duplicates.length)throw new Error("Laudo duplicado: "+duplicates.join(", "));
+ const now=new Date().toISOString();const oficioRows=S.oficios.map(r=>r.slice());
+ const laudoRows=[],payRows=[];
+ for(const it of itens){
+   const idx=it.linha-1,r=oficioRows[idx];if(!r||upper(r[4])!=="NO ARMÁRIO")continue;
+   r[4]="Concluído";r[5]=it.laudo;r[6]=selectedPerito;r[8]=now;
+   laudoRows.push([now,selectedPerito,it.laudo,r[3]]);payRows.push([now,r[3],selectedPerito,it.laudo]);
+ }
+ if(!laudoRows.length)throw new Error("Nenhum ofício permaneceu disponível para baixa.");
+ await writeWorkbook(async ctx=>{
+   const o=ctx.workbook.worksheets.getItem("Oficios");o.getRangeByIndexes(0,0,oficioRows.length,11).values=oficioRows;
+   const l=ctx.workbook.worksheets.getItem("Laudos"),p=ctx.workbook.worksheets.getItem("Pagamentos");
+   if(laudoRows.length)appendRange(ctx,l,laudoRows,await getAppendRow(ctx,l));
+   if(payRows.length)appendRange(ctx,p,payRows,await getAppendRow(ctx,p));
+ });
+ pagarRows=[];await init();showMsg(`✔ ${laudoRows.length} ofício(s) baixado(s) por ${selectedPerito}.`);
+}
+
+/* =========================
+   Estorno
+   ========================= */
+async function renderEstornos(){
+ const d=S.dist.slice(1).slice(-8).reverse();
+ $("estornos").innerHTML=d.length?d.map((r,i)=>`<div class="card"><b>${esc(t(r[0]))}</b> — ${r[1]} ocorrência(s) — <span class="${upper(r[6]).startsWith("ESTORNADO")?"danger":"ok"}">${esc(t(r[6])||"Ativo")}</span><br><button class="btn2" data-e="${S.dist.length-1-i}">Estornar</button></div>`).join(""):"Nenhum lançamento";
+ $("estornos").querySelectorAll("button").forEach(b=>b.onclick=()=>safe("Estornando",()=>estornar(Number(b.dataset.e))));
+}
+async function estornar(rowIndex){
+ const row=S.dist[rowIndex];if(!row)throw new Error("Lançamento não encontrado.");
+ if(upper(row[6]).startsWith("ESTORNADO"))throw new Error("Este lançamento já foi estornado.");
+ const pairs=t(row[4]).split(",").map(x=>x.trim()).filter(Boolean);
+ const md={...S.metasD},mq={...S.metasQ};
+ for(const p of pairs){const a=p.indexOf("→");if(a<0)continue;const inst=p.slice(a+1).trim();if(DIAS.includes(inst))md[inst]=Math.max(0,(md[inst]||0)-1);else if(S.quim.includes(inst))mq[inst]=Math.max(0,(mq[inst]||0)-1)}
+ const wanted=pairs.map(p=>{const a=p.indexOf("→");return a<0?null:{num:p.slice(0,a).trim().toUpperCase(),inst:p.slice(a+1).trim()}}).filter(Boolean);
+ const ov=S.oficios.map(r=>r.slice());
+ for(const w of wanted){
+   const ix=ov.findIndex((r,i)=>i>0&&upper(r[0])===w.num&&t(r[3])===w.inst&&upper(r[4])==="NO ARMÁRIO");
+   if(ix>=0)ov.splice(ix,1);
+ }
+ row[6]="Estornado em "+new Date().toISOString();
+ await writeWorkbook(async ctx=>{
+   ctx.workbook.worksheets.getItem("Oficios").getRangeByIndexes(0,0,ov.length,11).values=ov;
+   const dv=S.dist.map(r=>r.slice());dv[rowIndex][6]=row[6];
+   ctx.workbook.worksheets.getItem("Distribuicao").getRangeByIndexes(0,0,dv.length,10).values=dv;
+   S.metasD=md;S.metasQ=mq;await persistProps(ctx);
+ });
+ await init();showMsg("✔ Lançamento estornado.");
+}
+
+/* =========================
+   Armário / Resumo
+   ========================= */
+function renderResumo(){
+ const p=pendingByInst();let total=0;Object.values(p).forEach(v=>total+=v);
+ let html="<b>SALDOS — PLANTÃO</b><div>";DIAS.forEach(d=>html+=`<span class="chip ${p[d]?"danger":"ok"}">${esc(d)}: ${p[d]||0}</span>`);html+="</div><b>QUÍMICA</b><div>";S.quim.forEach(q=>html+=`<span class="chip ${p[q]?"danger":"ok"}">${esc(q)}: ${p[q]||0}</span>`);html+=`</div><div class="small" style="margin-top:4px">Total pendente no armário: <b>${total}</b></div>`;
+ $("resumo").innerHTML=html;
+}
+function renderArmario(){
+ const q=upper($("buscaArmario").value),rows=armarioRows().filter(r=>!q||[r[0],r[1],r[2],r[3]].join(" ").toUpperCase().includes(q));let html="";
+ for(const d of DIAS){const xs=rows.filter(r=>t(r[3])===d);html+=`<div class="card"><b>${d} (${xs.length})</b>${xs.map(r=>`<div class="small mono">${esc(r[0])} — ${esc(r[1])}${r[2]?", "+esc(r[2]):""}</div>`).join("")}</div>`}
+ for(const qn of S.quim){const xs=rows.filter(r=>t(r[3])===qn);html+=`<div class="card"><b>${esc(qn)} (${xs.length})</b>${xs.map(r=>`<div class="small mono">${esc(r[0])} — ${esc(r[1])}${r[2]?", "+esc(r[2]):""}</div>`).join("")}</div>`}
+ $("gavetas").innerHTML=html||"<i>Armário vazio.</i>";
+}
+
+/* =========================
+   Chefia
+   ========================= */
+async function loginChefia(){
+ if(t($("senha").value)!==ADMIN)throw new Error("Senha incorreta.");
+ S.logged=true;$("loginChefia").classList.add("hide");$("painelChefia").classList.remove("hide");$("senha2").value=$("senha").value;$("pct").value=S.pct;populateInst();renderPesos();await ranking();await ccvRefresh();
+}
+function populateInst(){const a=[...DIAS,...S.quim];$("instZerar").innerHTML=a.map(x=>`<option>${esc(x)}</option>`).join("")}
+function renderPesos(){
+ let a="",b="";for(const d of DIAS)a+=`<div class="row"><label style="flex:2">${d}</label><input id="pd_${d}" type="number" min="0.01" value="${S.pesosD[d]||1}"></div>`;
+ for(const q of S.quim)b+=`<div class="row"><label style="flex:2">${esc(q)}</label><input id="pq_${q.replace(/[^a-zA-Z0-9]/g,"_")}" type="number" min="0.01" value="${S.pesosQ[q]||1}"></div>`;
+ $("pesosDias").innerHTML="<b>PLANTÃO</b>"+a;$("pesosQuim").innerHTML="<b>QUÍMICA</b>"+b;
+}
+async function salvarPct(){
+ if(t($("senha2").value)!==ADMIN)throw new Error("Senha incorreta.");
+ const v=Number($("pct").value);if(!(v>=0&&v<=100))throw new Error("Informe percentual entre 0 e 100.");
+ const old=S.pct,h=await readWorkbook(ctx=>loadSheets(ctx,["Config Chefia"]));void h;
+ await writeWorkbook(async ctx=>{
+   const sh=ctx.workbook.worksheets.getItem("Config Chefia"),r=sh.getUsedRangeOrNullObject(true);r.load(["rowCount","isNullObject"]);await ctx.sync();
+   const row=r.isNullObject?0:r.rowCount;sh.getRangeByIndexes(row,0,1,5).values=[[new Date().toISOString(),old,v,t($("obsPct").value),"Chefia"]];S.pct=v;await persistProps(ctx);
+ });
+ $("pct").value=S.pct;showMsg("✔ Percentual alterado.");
+}
+async function salvarPesos(){
+ if(t($("senha2").value)!==ADMIN)throw new Error("Senha incorreta.");
+ for(const d of DIAS)S.pesosD[d]=Number($("pd_"+d).value)||1;
+ for(const q of S.quim){const id="pq_"+q.replace(/[^a-zA-Z0-9]/g,"_");S.pesosQ[q]=Number($(id).value)||1}
+ await writeWorkbook(async ctx=>persistProps(ctx));showMsg("✔ Pesos salvos.");
+}
+async function ranking(){
+ const de=t($("rankDe").value),ate=t($("rankAte").value),c={};
+ for(const r of S.laudos.slice(1)){const dt=new Date(r[0]);if(de&&dt<new Date(de+"T00:00:00"))continue;if(ate&&dt>new Date(ate+"T23:59:59"))continue;const n=t(r[1]);if(n)c[n]=(c[n]||0)+1}
+ const arr=Object.entries(c).map(([n,q])=>({n,q})).sort((a,b)=>b.q-a.q);
+ $("rankBox").innerHTML=arr.length?`<table class="table"><tr><th>Perito</th><th>Laudos</th></tr>${arr.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.q}</td></tr>`).join("")}</table>`:"<i>Sem laudos no período.</i>";
+}
+async function ccvRefresh(){
+ const rows=S.oficios.slice(1).map((r,i)=>({...r,linha:i+2})).filter(r=>upper(r[4])==="CONCLUÍDO"&&upper(r[9])==="SIM"&&!t(r[10]));
+ ccvRows=rows;$("ccvBox").innerHTML=rows.length?rows.map(r=>`<label class="card"><input type="checkbox" data-ccv="${r.linha}"> <span class="mono">${esc(r[0])}</span> — ${esc(r[1])} — laudo ${esc(r[5])}</label>`).join(""):"Nenhum ofício pendente.";
+}
+async function ccvEnviar(){
+ if(!S.logged||t($("senha2").value)!==ADMIN)throw new Error("Senha inválida.");
+ const sel=[...$("ccvBox").querySelectorAll("input[data-ccv]:checked")].map(x=>Number(x.dataset.ccv));if(!sel.length)throw new Error("Selecione ao menos um ofício.");
+ const ov=S.oficios.map(r=>r.slice()),rows=[],now=new Date().toISOString(),lote="L"+now.replace(/[-:.TZ]/g,"").slice(0,12);
+ for(const n of sel){const r=ov[n-1];if(!r)continue;if(upper(r[4])!=="CONCLUÍDO"||upper(r[9])!=="SIM"||t(r[10]))continue;r[10]="Encaminhado "+now;rows.push([now,r[0],[r[1],r[2]].filter(Boolean).join(", "),r[5],r[6],lote])}
+ await writeWorkbook(async ctx=>{
+   ctx.workbook.worksheets.getItem("Oficios").getRangeByIndexes(0,0,ov.length,11).values=ov;
+   if(rows.length){const sh=ctx.workbook.worksheets.getItem("Encaminhamentos CCV");appendRange(ctx,sh,rows,await getAppendRow(ctx,sh))}
+ });
+ await init();await ccvRefresh();showMsg("✔ "+rows.length+" ofício(s) encaminhado(s) à CCV.");
+}
+async function auditar(){
+ const de=t($("audDe").value),ate=t($("audAte").value),rows=[["Data/Hora","Total","Plantão","Química","Sobra","Status"]];
+ for(let i=1;i<S.dist.length;i++){const r=S.dist[i],dt=new Date(r[0]);if(de&&dt<new Date(de+"T00:00:00"))continue;if(ate&&dt>new Date(ate+"T23:59:59"))continue;rows.push([r[0],r[1],r[2],r[3],r[9],r[6]])}
+ await writeWorkbook(async ctx=>{
+   let sh=ctx.workbook.worksheets.getItemOrNullObject("Relatorio_Auditoria");sh.load("isNullObject");await ctx.sync();if(sh.isNullObject)sh=ctx.workbook.worksheets.add("Relatorio_Auditoria");
+   const old=sh.getUsedRangeOrNullObject(true);old.load(["rowCount","columnCount","isNullObject"]);await ctx.sync();if(!old.isNullObject)sh.getRangeByIndexes(0,0,old.rowCount,Math.max(6,old.columnCount)).clear("Contents");
+   sh.getRangeByIndexes(0,0,rows.length,6).values=rows;sh.getRange("A1:F1").format.font.bold=true;
+ });
+ showMsg("✔ Relatório criado na aba Relatorio_Auditoria.");
+}
+async function zerarInst(){
+ if(t($("senha2").value)!==ADMIN)throw new Error("Senha incorreta.");const alvo=$("instZerar").value;const ov=S.oficios.map(r=>r.slice()),now=new Date().toISOString();let n=0;
+ for(let i=1;i<ov.length;i++)if(t(ov[i][3])===alvo&&upper(ov[i][4])==="NO ARMÁRIO"){ov[i][4]="Baixa administrativa";ov[i][6]="CHEFIA";ov[i][8]=now;n++}
+ if(!n)throw new Error(alvo+" já está zerado.");
+ await writeWorkbook(async ctx=>ctx.workbook.worksheets.getItem("Oficios").getRangeByIndexes(0,0,ov.length,11).values=ov);await init();showMsg("✔ "+alvo+" zerado.");
+}
+async function zerarTodos(){
+ if(t($("senha2").value)!==ADMIN)throw new Error("Senha incorreta.");const ov=S.oficios.map(r=>r.slice()),now=new Date().toISOString();let n=0;
+ for(let i=1;i<ov.length;i++)if(upper(ov[i][4])==="NO ARMÁRIO"){ov[i][4]="Baixa administrativa";ov[i][6]="CHEFIA";ov[i][8]=now;n++}
+ if(!n)throw new Error("Tudo já está zerado.");
+ await writeWorkbook(async ctx=>ctx.workbook.worksheets.getItem("Oficios").getRangeByIndexes(0,0,ov.length,11).values=ov);await init();showMsg("✔ "+n+" ofício(s) baixado(s) administrativamente.");
+}
+function renderAll(){renderResumo();renderBuffer();renderPagar();renderArmario();renderPeritos();renderEstornos()}
+</script>
+</body>
+</html>
